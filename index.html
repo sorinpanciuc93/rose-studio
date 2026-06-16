@@ -127,6 +127,22 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .rc-ok{background:#D2F0DE;color:#1C8A50}
 .rc-miss{background:#FBD7DE;color:#C0344F}
 .rc-na{background:#EEE4E8;color:#9B8790}
+.rep-row.day-future{border-left-color:#E7D6DB;background:var(--blush);opacity:.55}
+.rt{white-space:nowrap}
+.rt-ok,.rt-ok b{color:#1C8A50}
+.acc-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:16px;
+  background:var(--blush);margin-bottom:10px;border:1.5px solid transparent;text-align:left}
+.acc-row.on{border-color:var(--rose)}
+.acc-row.off{opacity:.5}
+.acc-row .dot{width:14px;height:14px;border-radius:50%;flex:0 0 auto}
+.acc-row .nm{flex:1;font-weight:700}
+.acc-row .nm small{display:block;font-weight:600;color:var(--rose-soft);font-size:11.5px}
+.acc-check{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-size:14px;font-weight:800;
+  color:#fff;background:var(--rose-deep);flex:0 0 auto}
+.acc-row.off .acc-check{background:#E0D2D7}
+.rep-select{width:100%;padding:13px 14px;border-radius:14px;border:1.5px solid var(--line);background:var(--blush);
+  font-family:inherit;font-size:15px;font-weight:600;color:var(--rose-ink);margin-top:6px;appearance:none;-webkit-appearance:none}
+.rep-select:focus{outline:none;border-color:var(--rose)}
 
 .empty{text-align:center;padding:48px 24px;color:var(--rose-soft)}
 .empty .big{font-size:46px;margin-bottom:8px}
@@ -230,8 +246,15 @@ let viewDate = today;          // which day the account screen is showing
 let histProg = null;           // progress doc for a past day being viewed
 let histLoading = false;       // true while a past day is being fetched
 let reportData = {};           // dateStr -> progress doc, for the generated report
-let reportDays = [];           // list of dateStrs in the report window (oldest -> today)
+let reportDays = [];           // list of dateStrs in the report window (oldest -> latest)
 let reportLoading = false;
+let reportLabel = "";          // display label of the generated report period
+let reportAccIds = [];         // accounts included in the generated report
+let reportExcluded = new Set();// accounts the user unchecked on the landing
+let repType = "week";          // picker mode: "week" | "month"
+let repYear = clampYear((new Date()).getFullYear());
+let repWeekMon = mondayOf(todayStr());
+let repMonth = (new Date()).getMonth();
 let adminTab = "overview";
 
 /* ---------- helpers ---------- */
@@ -245,6 +268,17 @@ const MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec
 function dateAdd(str,days){const d=new Date(str+"T00:00:00");d.setDate(d.getDate()+days);return fmtYMD(d);}
 function dParts(str){const d=new Date(str+"T00:00:00");return {wd:WD[d.getDay()],day:d.getDate(),mon:MO[d.getMonth()],year:d.getFullYear()};}
 function relLabel(str){if(str===today)return "Today";if(str===dateAdd(today,-1))return "Yesterday";const p=dParts(str);return p.wd+" "+p.day+" "+p.mon;}
+/* calendar week (Monday start) + month helpers for reports */
+const MONF=["January","February","March","April","May","June","July","August","September","October","November","December"];
+function clampYear(y){return Math.max(2026,Math.min(2030,y));}
+function mondayOf(str){const d=new Date(str+"T00:00:00");const off=(d.getDay()+6)%7;d.setDate(d.getDate()-off);return fmtYMD(d);}
+function isoWeek1Monday(year){const jan4=new Date(year,0,4);const off=(jan4.getDay()+6)%7;jan4.setDate(jan4.getDate()-off);return jan4;}
+function weeksInYear(year){const start=isoWeek1Monday(year),next=isoWeek1Monday(year+1);const out=[];let d=new Date(start),wn=1;
+  while(d<next){out.push({wn,monday:fmtYMD(d)});d.setDate(d.getDate()+7);wn++;}return out;}
+function weekDays(monday){const out=[];for(let i=0;i<7;i++)out.push(dateAdd(monday,i));return out;}
+function monthDays(year,month){const out=[];const d=new Date(year,month,1);while(d.getMonth()===month){out.push(fmtYMD(d));d.setDate(d.getDate()+1);}return out;}
+function weekRangeLabel(monday){const a=dParts(monday),b=dParts(dateAdd(monday,6));
+  return a.mon===b.mon?(a.day+"–"+b.day+" "+b.mon):(a.day+" "+a.mon+"–"+b.day+" "+b.mon);}
 function viewingToday(){return viewDate===today;}
 function activeProg(){return viewingToday()?prog:(histProg||{byAccount:{}});}
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1900);}
@@ -357,16 +391,28 @@ async function loadHist(dateStr){
 
 /* ---------- reports ---------- */
 function dayCount(dateStr,accId,cat){const p=reportData[dateStr];return (p&&p.byAccount&&p.byAccount[accId]&&p.byAccount[accId][cat])||0;}
-async function genReport(period){
-  const n=period==="month"?30:7;
-  reportDays=[];for(let i=n-1;i>=0;i--)reportDays.push(dateAdd(today,-i));
-  reportData={};reportLoading=true;route={name:"report",period};render();
+function generateFromPicker(){
+  if(repType==="month"){
+    const days=monthDays(repYear,repMonth);
+    runReport(days, MONF[repMonth]+" "+repYear);
+  } else {
+    const days=weekDays(repWeekMon);
+    const wk=weeksInYear(repYear).find(w=>w.monday===repWeekMon);
+    const num=wk?("Week "+wk.wn+" · "):"";
+    runReport(days, num+weekRangeLabel(repWeekMon)+" "+dParts(repWeekMon).year);
+  }
+}
+async function runReport(days,label){
+  reportDays=days; reportLabel=label;
+  reportAccIds=visibleAccounts().filter(a=>!reportExcluded.has(a.id)).map(a=>a.id);
+  if(!reportAccIds.length) return toast("Pick at least one account");
+  reportData={}; reportLoading=true; route={name:"report"}; render();
   if(backend==="fb"){
-    const pairs=await Promise.all(reportDays.map(d=>
+    const pairs=await Promise.all(days.map(d=>
       getDoc(doc(db,"studio","progress-"+d)).then(s=>[d,s.exists()?s.data():{byAccount:{}}]).catch(()=>[d,{byAccount:{}}])));
     pairs.forEach(([d,data])=>{reportData[d]=(data&&data.byAccount)?data:{byAccount:{}};});
   } else {
-    reportDays.forEach(d=>{try{reportData[d]=JSON.parse(localStorage.getItem("rs.prog-"+d)||"null")||{byAccount:{}};}catch(e){reportData[d]={byAccount:{}};}});
+    days.forEach(d=>{try{reportData[d]=JSON.parse(localStorage.getItem("rs.prog-"+d)||"null")||{byAccount:{}};}catch(e){reportData[d]={byAccount:{}};}});
   }
   reportLoading=false;
   if(route.name==="report")render();
@@ -494,46 +540,66 @@ function viewAccount(accId){
 /* ---------- reports ---------- */
 function viewReports(){
   const accts=visibleAccounts();
-  const list = accts.length
-    ? accts.map(a=>`<div class="list-row"><span class="dot" style="background:${a.color||'var(--rose)'}"></span>
-        <span class="nm">${esc(a.name)}<small>${a.username?('@'+esc(a.username)):'&nbsp;'}</small></span></div>`).join("")
+  const accRows = accts.length
+    ? accts.map(a=>{const on=!reportExcluded.has(a.id);
+        return `<button type="button" class="acc-row ${on?'on':'off'}" data-toggle-acc="${a.id}">
+          <span class="dot" style="background:${a.color||'var(--rose)'}"></span>
+          <span class="nm">${esc(a.name)}<small>${a.username?('@'+esc(a.username)):'&nbsp;'}</small></span>
+          <span class="acc-check">${on?'✓':''}</span></button>`;}).join("")
     : `<p class="hint">No accounts to report on yet.</p>`;
+  const inclCount = accts.filter(a=>!reportExcluded.has(a.id)).length;
+
+  let yearOpts="";for(let y=2026;y<=2030;y++)yearOpts+=`<option value="${y}" ${y===repYear?'selected':''}>${y}</option>`;
+  const curMon=mondayOf(today), lastMon=dateAdd(curMon,-7);
+  const weekOpts=weeksInYear(repYear).map(w=>{const tag=w.monday===curMon?' · this week':(w.monday===lastMon?' · last week':'');
+    return `<option value="${w.monday}" ${w.monday===repWeekMon?'selected':''}>Week ${w.wn}: ${weekRangeLabel(w.monday)}${tag}</option>`;}).join("");
+  const monthOpts=MONF.map((m,i)=>`<option value="${i}" ${i===repMonth?'selected':''}>${m}</option>`).join("");
+  const picker = repType==="month"
+    ? `<label class="fld">Year</label><select class="rep-select" id="repYear">${yearOpts}</select>
+       <label class="fld">Month</label><select class="rep-select" id="repMonth">${monthOpts}</select>`
+    : `<label class="fld">Year</label><select class="rep-select" id="repYear">${yearOpts}</select>
+       <label class="fld">Week</label><select class="rep-select" id="repWeek">${weekOpts}</select>`;
+
   return `<div class="bar"><button class="back" data-go="dash">‹</button><h1><span class="sub">Reports</span>Generate report</h1></div>
     <div class="panel"><h3>Accounts included</h3>
-      <p class="hint">Covers the ${accts.length} account${accts.length!==1?'s':''} you manage.</p>${list}</div>
-    <div class="panel"><h3>Choose a period</h3><p class="hint">Each day is checked against that account’s daily goals.</p>
-      <button class="btn-primary" data-report="week">📊 Weekly report · last 7 days</button>
-      <button class="btn-ghost" data-report="month">📅 Monthly report · last 30 days</button></div>
+      <p class="hint">Tap to include or exclude. ${inclCount} of ${accts.length} selected.</p>${accRows}</div>
+    <div class="panel"><h3>Choose a period</h3>
+      <div class="seg">
+        <button type="button" data-reptype="week" class="${repType==='week'?'on':''}">Weekly</button>
+        <button type="button" data-reptype="month" class="${repType==='month'?'on':''}">Monthly</button></div>
+      ${picker}
+      <button class="btn-primary" id="genReport" style="margin-top:16px">📊 Generate ${repType==='month'?'monthly':'weekly'} report</button></div>
     <p class="note">Green = goal met or surpassed · Red = goal missed that day.</p>`;
 }
 function viewReport(){
-  const period=route.period, label=period==="month"?"Monthly":"Weekly";
-  const accts=visibleAccounts(), counting=CATS.filter(c=>!c.noCount);
-  if(reportLoading) return `<div class="bar"><button class="back" data-go="reports">‹</button><h1><span class="sub">${label} report</span>Building…</h1></div>
+  const accts=visibleAccounts().filter(a=>reportAccIds.includes(a.id)), counting=CATS.filter(c=>!c.noCount);
+  if(reportLoading) return `<div class="bar"><button class="back" data-go="reports">‹</button><h1><span class="sub">${esc(reportLabel)}</span>Building…</h1></div>
     <div class="screen"><div class="logo">📊</div><p>Gathering ${reportDays.length} days of data…</p></div>`;
+  const nDays=reportDays.length;
   const body = accts.length ? accts.map(a=>{
     const totals={}; counting.forEach(c=>totals[c.key]=0);
     let metDays=0, goalDays=0;
     const rows=reportDays.map(d=>{
-      const p=dParts(d); let allMet=true, anyGoal=false;
+      const p=dParts(d), future=d>today; let allMet=true, anyGoal=false;
       const cells=counting.map(c=>{const g=a.goals?.[c.key]||0, v=dayCount(d,a.id,c.key); totals[c.key]+=v;
-        if(g>0){anyGoal=true; if(v<g)allMet=false;}
-        const cls=g>0?(v>=g?'rc-ok':'rc-miss'):'rc-na';
+        if(g>0&&!future){anyGoal=true; if(v<g)allMet=false;}
+        const cls=future?'rc-na':(g>0?(v>=g?'rc-ok':'rc-miss'):'rc-na');
         return `<span class="rc ${cls}">${c.label[0]} ${g>0?(v+'/'+g):v}</span>`;}).join("");
       if(anyGoal){goalDays++; if(allMet)metDays++;}
-      const rc=!anyGoal?'':(allMet?'day-ok':'day-miss');
+      const rc=future?'day-future':(!anyGoal?'':(allMet?'day-ok':'day-miss'));
       return `<div class="rep-row ${rc}"><span class="rep-day">${p.wd} ${p.day} ${p.mon}</span><span class="rep-cells">${cells}</span></div>`;
     }).join("");
-    const totLine=counting.map(c=>`<b>${totals[c.key]}</b> ${c.label.toLowerCase()}`).join(" · ");
+    const totLine=counting.map(c=>{const g=a.goals?.[c.key]||0, tgt=g*nDays, met=g>0&&totals[c.key]>=tgt;
+      return `<span class="rt ${met?'rt-ok':''}"><b>${totals[c.key]}${g>0?('/'+tgt):''}</b> ${c.label.toLowerCase()}</span>`;}).join(" · ");
     return `<div class="panel"><div class="rep-head"><span class="dot" style="background:${a.color||'var(--rose)'}"></span>
         <span class="nm">${esc(a.name)}<small>${a.username?('@'+esc(a.username)):''}</small></span></div>
       <div class="rep-tot">${totLine}</div>
       <div class="rep-sub">${goalDays>0?('Goal met on '+metDays+'/'+goalDays+' days'):'No daily goals set'}</div>
       ${rows}</div>`;
-  }).join("") : `<div class="empty"><div class="big">📊</div><h2>Nothing to report</h2><p>No accounts assigned to you.</p></div>`;
+  }).join("") : `<div class="empty"><div class="big">📊</div><h2>Nothing to report</h2><p>No accounts selected.</p></div>`;
   return `<div class="bar"><button class="back" data-go="reports">‹</button>
-    <h1><span class="sub">${label} · ${reportDays[0]} to ${today}</span>Report</h1></div>${body}
-    <p class="note">Green = met or surpassed · Red = missed · grey = no goal set.</p>`;
+    <h1><span class="sub">Report</span>${esc(reportLabel)}</h1></div>${body}
+    <p class="note">Green = met or surpassed · Red = missed · grey = no goal / upcoming.</p>`;
 }
 
 /* ---------- admin dashboard (live overview) ---------- */
@@ -640,7 +706,14 @@ function bind(){
   document.querySelectorAll("[data-stop]").forEach(el=>el.onclick=e=>e.stopPropagation());
   document.querySelectorAll("[data-step]").forEach(b=>b.onclick=e=>{e.stopPropagation();tick(b.dataset.acct,b.dataset.cat,+b.dataset.step);});
   document.querySelectorAll("[data-date]").forEach(b=>b.onclick=()=>goToDate(b.dataset.date));
-  document.querySelectorAll("[data-report]").forEach(b=>b.onclick=()=>genReport(b.dataset.report));
+  document.querySelectorAll("[data-toggle-acc]").forEach(b=>b.onclick=()=>{const id=b.dataset.toggleAcc;if(reportExcluded.has(id))reportExcluded.delete(id);else reportExcluded.add(id);render();});
+  document.querySelectorAll("[data-reptype]").forEach(b=>b.onclick=()=>{repType=b.dataset.reptype;render();});
+  if($("#repYear"))$("#repYear").onchange=e=>{repYear=clampYear(+e.target.value);
+    repWeekMon = repYear===dParts(today).year ? mondayOf(today) : weeksInYear(repYear)[0].monday;
+    render();};
+  if($("#repWeek"))$("#repWeek").onchange=e=>{repWeekMon=e.target.value;};
+  if($("#repMonth"))$("#repMonth").onchange=e=>{repMonth=+e.target.value;};
+  if($("#genReport"))$("#genReport").onclick=()=>generateFromPicker();
   if($("#datePick"))$("#datePick").onchange=e=>goToDate(e.target.value);
   const _strip=$("#dayStrip");
   if(_strip){const on=_strip.querySelector(".day-chip.on");
