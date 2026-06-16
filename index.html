@@ -81,7 +81,28 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .stepper{display:flex;align-items:center;justify-content:space-between;background:var(--blush-2);border-radius:12px;overflow:hidden;margin-top:4px}
 .stepper button{width:40px;height:40px;font-size:22px;font-weight:600;color:var(--rose-deep)}
 .stepper button:active{background:#FBD7E1}
+.stepper button:disabled{color:var(--rose-soft);opacity:.5}
 .stepper .v{text-align:center;font-weight:700;font-size:15px;flex:1}
+.stepper.locked{opacity:.6}
+
+/* date navigation */
+.datebar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.cal-btn{position:relative;display:grid;place-items:center;width:46px;height:46px;border-radius:14px;
+  background:var(--surface);box-shadow:var(--shadow-sm);font-size:20px;flex:0 0 auto;cursor:pointer}
+.cal-btn input{position:absolute;inset:0;opacity:0;cursor:pointer;border:none;padding:0;font-size:16px}
+.day-strip{display:flex;gap:8px;overflow-x:auto;padding:4px 2px;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.day-strip::-webkit-scrollbar{display:none}
+.day-chip{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:1px;min-width:48px;
+  padding:8px 8px;border-radius:14px;background:var(--surface);box-shadow:var(--shadow-sm);border:1.5px solid transparent}
+.day-chip:active{transform:scale(.95)}
+.day-chip .dc-wd{font-size:10px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--rose-soft)}
+.day-chip .dc-day{font-family:"Fraunces",serif;font-weight:600;font-size:17px;color:var(--rose-ink)}
+.day-chip.today .dc-wd{color:var(--rose-deep)}
+.day-chip.on{border-color:var(--rose-deep);background:var(--blush-2)}
+.day-chip.on .dc-day{color:var(--rose-deep)}
+.dateinfo{font-size:12.5px;font-weight:700;text-align:center;padding:9px 12px;border-radius:12px;margin:0 0 14px}
+.dateinfo.live{background:var(--blush-2);color:var(--rose-deep)}
+.dateinfo.past{background:#F1E8EB;color:#9B7E87}
 
 .empty{text-align:center;padding:48px 24px;color:var(--rose-soft)}
 .empty .big{font-size:46px;margin-bottom:8px}
@@ -154,7 +175,7 @@ label.fld{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;text
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, increment }
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, increment }
   from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 /* ---------- constants ---------- */
@@ -181,19 +202,30 @@ let prog = {byAccount:{}};
 let session = readSession();
 let route = {name:"loading"};
 let today = todayStr();
+let viewDate = today;          // which day the account screen is showing
+let histProg = null;           // progress doc for a past day being viewed
+let histLoading = false;       // true while a past day is being fetched
 let adminTab = "overview";
 
 /* ---------- helpers ---------- */
 const $ = (s,el=document)=>el.querySelector(s);
 const uid=()=>"x"+Math.random().toString(36).slice(2,8);
 const esc=s=>(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function todayStr(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function todayStr(){return fmtYMD(new Date());}
+function fmtYMD(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+const WD=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MO=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function dateAdd(str,days){const d=new Date(str+"T00:00:00");d.setDate(d.getDate()+days);return fmtYMD(d);}
+function dParts(str){const d=new Date(str+"T00:00:00");return {wd:WD[d.getDay()],day:d.getDate(),mon:MO[d.getMonth()],year:d.getFullYear()};}
+function relLabel(str){if(str===today)return "Today";if(str===dateAdd(today,-1))return "Yesterday";const p=dParts(str);return p.wd+" "+p.day+" "+p.mon;}
+function viewingToday(){return viewDate===today;}
+function activeProg(){return viewingToday()?prog:(histProg||{byAccount:{}});}
 function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("show");clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove("show"),1900);}
 function readSession(){try{return JSON.parse(localStorage.getItem("rs.session")||"null");}catch(e){return null;}}
 function saveSession(){localStorage.setItem("rs.session",JSON.stringify(session));}
 function logout(){session=null;localStorage.removeItem("rs.session");route={name:"login"};render();}
 
-function getCount(a,c){return (prog.byAccount[a]&&prog.byAccount[a][c])||0;}
+function getCount(a,c){const p=activeProg();return (p.byAccount[a]&&p.byAccount[a][c])||0;}
 function acctTotals(a){let g=0,d=0;CATS.forEach(c=>{const goal=a.goals?.[c.key]||0;g+=goal;d+=Math.min(getCount(a.id,c.key),goal);});return{goal:g,done:d};}
 function visibleAccounts(){
   if(!cfg)return[];
@@ -263,6 +295,7 @@ async function createStudio(code){
   await saveConfig();
 }
 async function tick(accId,cat,d){
+  if(!viewingToday()) return;                       // past days are view-only
   if(d<0 && getCount(accId,cat)<=0) return;
   prog.byAccount[accId]=prog.byAccount[accId]||{};
   prog.byAccount[accId][cat]=Math.max(0,(prog.byAccount[accId][cat]||0)+d);
@@ -273,9 +306,31 @@ async function tick(accId,cat,d){
     catch(e){ toast("Couldn’t sync — check connection"); }
   } else { prog.date=today; localStorage.setItem("rs.prog-"+today, JSON.stringify(prog)); }
 }
+function goToDate(dateStr){
+  if(!dateStr) return;
+  if(dateStr>today) dateStr=today;                  // never the future
+  viewDate=dateStr;
+  if(viewingToday()){ histProg=null; histLoading=false; render(); }
+  else loadHist(dateStr);
+}
+async function loadHist(dateStr){
+  histProg=null; histLoading=true; render();
+  if(backend==="fb"){
+    try{ const snap=await getDoc(doc(db,"studio","progress-"+dateStr));
+      histProg=snap.exists()?snap.data():{byAccount:{}}; }
+    catch(e){ histProg={byAccount:{}}; toast("Couldn’t load that day"); }
+  } else {
+    try{ histProg=JSON.parse(localStorage.getItem("rs.prog-"+dateStr)||"null")||{byAccount:{}}; }
+    catch(e){ histProg={byAccount:{}}; }
+  }
+  if(!histProg.byAccount) histProg.byAccount={};
+  histLoading=false;
+  if(route.name==="account") render();
+}
 
 /* ============================================================ RENDER */
 function render(){
+  if(route.name!=="account"){ viewDate=today; histProg=null; histLoading=false; }
   const app=$("#app");
   const v={
     loading:viewLoading, error:viewError, bootstrap:viewBootstrap, login:viewLogin,
@@ -337,25 +392,46 @@ function viewEmployeeDash(){
 function viewAccount(accId){
   const a=(cfg.accounts||[]).find(x=>x.id===accId);
   if(!a){route={name:"dash"};return render(),"";}
+  const editable=viewingToday(), loading=histLoading&&!editable;
   const {goal,done}=acctTotals(a);
+
+  // 14-day timeline strip (oldest -> today)
+  const strip=[];
+  for(let i=13;i>=0;i--){
+    const d=dateAdd(today,-i),p=dParts(d),on=d===viewDate,isToday=d===today;
+    strip.push(`<button class="day-chip ${on?'on':''} ${isToday?'today':''}" data-date="${d}">
+      <span class="dc-wd">${isToday?'Today':p.wd}</span><span class="dc-day">${p.day}</span></button>`);
+  }
+
   const tiles=CATS.map(c=>{
     const g=a.goals?.[c.key]||0,n=getCount(a.id,c.key),link=a.links?.[c.key]||"",ok=g>0&&n>=g,pct=g>0?Math.min(100,n/g*100):0;
-    return `<div class="cat-tile ${ok?'complete':''}" ${link?('data-open="'+esc(link)+'"'):''}>
+    const cnt = loading ? '…' : (g>0?(n+'/'+g):n);
+    return `<div class="cat-tile ${ok?'complete':''}" ${(editable&&link)?('data-open="'+esc(link)+'"'):''}>
         <div class="ct-top"><div class="ct-emoji">${c.emoji}</div>${ok?'<span class="ct-check">💛</span>':''}</div>
         <div class="ct-name">${c.label}</div>
         <div class="ct-goal">${g>0?('Goal · '+g):'No goal'}</div>
-        <div class="ct-count">${g>0?(n+'/'+g):n}</div>
-        ${g>0?`<div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>`:''}
-        <div class="stepper" data-stop="1">
-          <button data-step="-1" data-cat="${c.key}" data-acct="${a.id}">−</button>
-          <span class="v">${n}</span>
-          <button data-step="1" data-cat="${c.key}" data-acct="${a.id}">+</button>
+        <div class="ct-count">${cnt}</div>
+        ${g>0?`<div class="progress-track"><div class="progress-fill" style="width:${loading?0:pct}%"></div></div>`:''}
+        <div class="stepper ${editable?'':'locked'}" data-stop="1">
+          <button ${editable?'':'disabled'} data-step="-1" data-cat="${c.key}" data-acct="${a.id}">−</button>
+          <span class="v">${loading?'·':n}</span>
+          <button ${editable?'':'disabled'} data-step="1" data-cat="${c.key}" data-acct="${a.id}">+</button>
         </div></div>`;
   }).join("");
+
+  const tp=dParts(today), info = editable
+    ? `Today · ${tp.wd} ${tp.day} ${tp.mon} ${tp.year} — tap + or − to log`
+    : `${relLabel(viewDate)} ${dParts(viewDate).year} · 🔒 view only`;
+
   return `<div class="bar"><button class="back" data-go="dash">‹</button>
-    <h1><span class="sub">${a.username?('@'+esc(a.username)):'Account'} · ${done}/${goal} today</span>${esc(a.name)}</h1></div>
+    <h1><span class="sub">${a.username?('@'+esc(a.username)):'Account'} · ${done}/${goal}</span>${esc(a.name)}</h1></div>
+    <div class="datebar">
+      <label class="cal-btn" title="Pick a date">📅<input type="date" id="datePick" max="${today}" value="${viewDate}"></label>
+      <div class="day-strip" id="dayStrip">${strip.join("")}</div>
+    </div>
+    <div class="dateinfo ${editable?'live':'past'}">${info}</div>
     <div class="cat-grid">${tiles}</div>
-    <p class="note">Tap a tile to open its folder. Post it, then tap + to log it.</p>`;
+    <p class="note">${editable?'Tap a tile to open its folder, then + to log it.':'Past day — counts are locked. Switch to Today to make changes.'}</p>`;
 }
 
 /* ---------- admin dashboard (live overview) ---------- */
@@ -458,6 +534,12 @@ function bind(){
   document.querySelectorAll("[data-open]").forEach(b=>{b.onclick=()=>{const u=b.dataset.open;if(u)window.open(u,"_blank","noopener");};});
   document.querySelectorAll("[data-stop]").forEach(el=>el.onclick=e=>e.stopPropagation());
   document.querySelectorAll("[data-step]").forEach(b=>b.onclick=e=>{e.stopPropagation();tick(b.dataset.acct,b.dataset.cat,+b.dataset.step);});
+  document.querySelectorAll("[data-date]").forEach(b=>b.onclick=()=>goToDate(b.dataset.date));
+  if($("#datePick"))$("#datePick").onchange=e=>goToDate(e.target.value);
+  const _strip=$("#dayStrip");
+  if(_strip){const on=_strip.querySelector(".day-chip.on");
+    if(on)_strip.scrollLeft=on.offsetLeft-_strip.clientWidth/2+on.clientWidth/2;
+    else _strip.scrollLeft=_strip.scrollWidth;}
   if($("#who"))$("#who").onclick=()=>{if(confirm("Log out of "+currentUserName()+"?"))logout();};
 
   if($("#createBtn"))$("#createBtn").onclick=()=>{const a=$("#ac1").value.trim(),b=$("#ac2").value.trim();
