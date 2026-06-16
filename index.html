@@ -109,6 +109,25 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .dateinfo.live{background:var(--blush-2);color:var(--rose-deep)}
 .dateinfo.past{background:#F1E8EB;color:#9B7E87}
 
+/* reports */
+.rep-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.rep-head .dot{width:12px;height:12px;border-radius:50%;flex:0 0 auto}
+.rep-head .nm{font-family:"Fraunces",serif;font-weight:600;font-size:18px}
+.rep-head .nm small{display:block;font-family:"Quicksand";font-weight:600;font-size:11.5px;color:var(--rose-soft)}
+.rep-tot{font-weight:700;color:var(--rose-deep);font-size:13.5px;margin-bottom:2px}
+.rep-tot b{font-family:"Fraunces",serif;font-size:15px}
+.rep-sub{font-size:12px;color:var(--rose-soft);font-weight:600;margin-bottom:12px}
+.rep-row{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:12px;
+  background:var(--blush);margin-bottom:6px;border-left:4px solid #E7D6DB}
+.rep-row.day-ok{border-left-color:#34A86B;background:#EAF7EF}
+.rep-row.day-miss{border-left-color:#E0566F;background:#FCEBEE}
+.rep-day{font-weight:700;font-size:12.5px;min-width:72px;flex:0 0 auto}
+.rep-cells{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.rc{font-size:11px;font-weight:700;padding:3px 7px;border-radius:8px;white-space:nowrap}
+.rc-ok{background:#D2F0DE;color:#1C8A50}
+.rc-miss{background:#FBD7DE;color:#C0344F}
+.rc-na{background:#EEE4E8;color:#9B8790}
+
 .empty{text-align:center;padding:48px 24px;color:var(--rose-soft)}
 .empty .big{font-size:46px;margin-bottom:8px}
 .empty h2{font-family:"Fraunces",serif;color:var(--rose-ink);font-weight:600;margin:0 0 6px}
@@ -210,6 +229,9 @@ let today = todayStr();
 let viewDate = today;          // which day the account screen is showing
 let histProg = null;           // progress doc for a past day being viewed
 let histLoading = false;       // true while a past day is being fetched
+let reportData = {};           // dateStr -> progress doc, for the generated report
+let reportDays = [];           // list of dateStrs in the report window (oldest -> today)
+let reportLoading = false;
 let adminTab = "overview";
 
 /* ---------- helpers ---------- */
@@ -333,6 +355,23 @@ async function loadHist(dateStr){
   if(route.name==="account") render();
 }
 
+/* ---------- reports ---------- */
+function dayCount(dateStr,accId,cat){const p=reportData[dateStr];return (p&&p.byAccount&&p.byAccount[accId]&&p.byAccount[accId][cat])||0;}
+async function genReport(period){
+  const n=period==="month"?30:7;
+  reportDays=[];for(let i=n-1;i>=0;i--)reportDays.push(dateAdd(today,-i));
+  reportData={};reportLoading=true;route={name:"report",period};render();
+  if(backend==="fb"){
+    const pairs=await Promise.all(reportDays.map(d=>
+      getDoc(doc(db,"studio","progress-"+d)).then(s=>[d,s.exists()?s.data():{byAccount:{}}]).catch(()=>[d,{byAccount:{}}])));
+    pairs.forEach(([d,data])=>{reportData[d]=(data&&data.byAccount)?data:{byAccount:{}};});
+  } else {
+    reportDays.forEach(d=>{try{reportData[d]=JSON.parse(localStorage.getItem("rs.prog-"+d)||"null")||{byAccount:{}};}catch(e){reportData[d]={byAccount:{}};}});
+  }
+  reportLoading=false;
+  if(route.name==="report")render();
+}
+
 /* ============================================================ RENDER */
 function render(){
   if(route.name!=="account"){ viewDate=today; histProg=null; histLoading=false; }
@@ -341,6 +380,7 @@ function render(){
     loading:viewLoading, error:viewError, bootstrap:viewBootstrap, login:viewLogin,
     dash:()=>session?.role==="admin"?viewAdminDash():viewEmployeeDash(),
     account:()=>viewAccount(route.accId),
+    reports:viewReports, report:viewReport,
     admin:viewAdmin, editAcct:()=>viewEditAcct(route.accId), editUser:()=>viewEditUser(route.userId)
   }[route.name] || viewLoading;
   app.innerHTML=v(); bind(); window.scrollTo(0,0);
@@ -390,7 +430,8 @@ function viewEmployeeDash(){
           <div class="acct-user">${a.username?('@'+esc(a.username)):'&nbsp;'}</div>
           <div class="acct-foot"><span class="chip ${full?'done':''}">${full?'All done':done+' / '+goal}</span>${ring(done,goal)}</div></div>`;
       }).join("")+`</div>`;
-  return `<div class="bar"><h1><span class="sub">Hi ${esc(currentUserName())} · ${today}</span>Today’s posts</h1>${userChip()}</div>
+  return `<div class="bar"><h1><span class="sub">Hi ${esc(currentUserName())} · ${today}</span>Today’s posts</h1>
+    <button class="iconbtn" data-go="reports" title="Reports">📊</button>${userChip()}</div>
     ${demoBanner()}${body}<p class="note">Tap an account to open its folders and tick off what you post.</p>`;
 }
 
@@ -450,6 +491,51 @@ function viewAccount(accId){
     <p class="note">${editable?'Tap a tile to open its folder, then + to log it.':'Past day — counts are locked. Switch to Today to make changes.'}</p>`;
 }
 
+/* ---------- reports ---------- */
+function viewReports(){
+  const accts=visibleAccounts();
+  const list = accts.length
+    ? accts.map(a=>`<div class="list-row"><span class="dot" style="background:${a.color||'var(--rose)'}"></span>
+        <span class="nm">${esc(a.name)}<small>${a.username?('@'+esc(a.username)):'&nbsp;'}</small></span></div>`).join("")
+    : `<p class="hint">No accounts to report on yet.</p>`;
+  return `<div class="bar"><button class="back" data-go="dash">‹</button><h1><span class="sub">Reports</span>Generate report</h1></div>
+    <div class="panel"><h3>Accounts included</h3>
+      <p class="hint">Covers the ${accts.length} account${accts.length!==1?'s':''} you manage.</p>${list}</div>
+    <div class="panel"><h3>Choose a period</h3><p class="hint">Each day is checked against that account’s daily goals.</p>
+      <button class="btn-primary" data-report="week">📊 Weekly report · last 7 days</button>
+      <button class="btn-ghost" data-report="month">📅 Monthly report · last 30 days</button></div>
+    <p class="note">Green = goal met or surpassed · Red = goal missed that day.</p>`;
+}
+function viewReport(){
+  const period=route.period, label=period==="month"?"Monthly":"Weekly";
+  const accts=visibleAccounts(), counting=CATS.filter(c=>!c.noCount);
+  if(reportLoading) return `<div class="bar"><button class="back" data-go="reports">‹</button><h1><span class="sub">${label} report</span>Building…</h1></div>
+    <div class="screen"><div class="logo">📊</div><p>Gathering ${reportDays.length} days of data…</p></div>`;
+  const body = accts.length ? accts.map(a=>{
+    const totals={}; counting.forEach(c=>totals[c.key]=0);
+    let metDays=0, goalDays=0;
+    const rows=reportDays.map(d=>{
+      const p=dParts(d); let allMet=true, anyGoal=false;
+      const cells=counting.map(c=>{const g=a.goals?.[c.key]||0, v=dayCount(d,a.id,c.key); totals[c.key]+=v;
+        if(g>0){anyGoal=true; if(v<g)allMet=false;}
+        const cls=g>0?(v>=g?'rc-ok':'rc-miss'):'rc-na';
+        return `<span class="rc ${cls}">${c.label[0]} ${g>0?(v+'/'+g):v}</span>`;}).join("");
+      if(anyGoal){goalDays++; if(allMet)metDays++;}
+      const rc=!anyGoal?'':(allMet?'day-ok':'day-miss');
+      return `<div class="rep-row ${rc}"><span class="rep-day">${p.wd} ${p.day} ${p.mon}</span><span class="rep-cells">${cells}</span></div>`;
+    }).join("");
+    const totLine=counting.map(c=>`<b>${totals[c.key]}</b> ${c.label.toLowerCase()}`).join(" · ");
+    return `<div class="panel"><div class="rep-head"><span class="dot" style="background:${a.color||'var(--rose)'}"></span>
+        <span class="nm">${esc(a.name)}<small>${a.username?('@'+esc(a.username)):''}</small></span></div>
+      <div class="rep-tot">${totLine}</div>
+      <div class="rep-sub">${goalDays>0?('Goal met on '+metDays+'/'+goalDays+' days'):'No daily goals set'}</div>
+      ${rows}</div>`;
+  }).join("") : `<div class="empty"><div class="big">📊</div><h2>Nothing to report</h2><p>No accounts assigned to you.</p></div>`;
+  return `<div class="bar"><button class="back" data-go="reports">‹</button>
+    <h1><span class="sub">${label} · ${reportDays[0]} to ${today}</span>Report</h1></div>${body}
+    <p class="note">Green = met or surpassed · Red = missed · grey = no goal set.</p>`;
+}
+
 /* ---------- admin dashboard (live overview) ---------- */
 function viewAdminDash(){
   const accts=cfg.accounts||[];
@@ -467,6 +553,7 @@ function viewAdminDash(){
           <div class="mini-grid">${minis}</div></div>`;
       }).join("");
   return `<div class="bar"><h1><span class="sub">Live · ${today}</span>All accounts</h1>
+    <button class="iconbtn" data-go="reports" title="Reports">📊</button>
     <button class="iconbtn" data-go="admin">⚙️</button>${userChip()}</div>
     ${demoBanner()}${body}<p class="note">Updates as your team posts. Tap an account to tick items yourself.</p>`;
 }
@@ -553,6 +640,7 @@ function bind(){
   document.querySelectorAll("[data-stop]").forEach(el=>el.onclick=e=>e.stopPropagation());
   document.querySelectorAll("[data-step]").forEach(b=>b.onclick=e=>{e.stopPropagation();tick(b.dataset.acct,b.dataset.cat,+b.dataset.step);});
   document.querySelectorAll("[data-date]").forEach(b=>b.onclick=()=>goToDate(b.dataset.date));
+  document.querySelectorAll("[data-report]").forEach(b=>b.onclick=()=>genReport(b.dataset.report));
   if($("#datePick"))$("#datePick").onchange=e=>goToDate(e.target.value);
   const _strip=$("#dayStrip");
   if(_strip){const on=_strip.querySelector(".day-chip.on");
