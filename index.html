@@ -365,11 +365,12 @@ function viewBootstrap(){return `<div class="screen"><div class="logo">🌷</div
     <button class="btn-primary" id="createBtn">Create studio</button>
   </div></div>`;}
 function viewLogin(){return `<div class="screen"><div class="logo">🌷</div><h2>Rosé Studio</h2>
-  <p>Enter your access code to see your accounts.</p>
+  <p>Enter your username and code to see your accounts.</p>
   <div class="card">
-    <input type="password" id="loginCode" class="code-in" inputmode="numeric" placeholder="• • • •"/>
+    <input type="text" id="loginName" placeholder="Username" autocapitalize="none" autocorrect="off" autocomplete="username"/>
+    <input type="password" id="loginCode" class="code-in" inputmode="numeric" placeholder="• • • •" style="margin-top:10px"/>
     <button class="btn-primary" id="loginBtn">Enter</button>
-    <p class="note">Don’t have a code? Ask your manager.</p>
+    <p class="note">Manager? Just enter your code. Don’t have a code? Ask your manager.</p>
   </div></div>`;}
 
 /* ---------- employee dashboard ---------- */
@@ -474,7 +475,7 @@ function viewAdmin(){
         <span class="nm">${esc(u.name)}<small>code ${esc(u.code)} · ${names.length} account${names.length!==1?'s':''}${names.length?(' · '+esc(names.join(', '))):''}</small></span>
         <button class="ed" data-editu="${u.id}">Edit</button></div>`;}).join(""):`<p class="hint">No team members yet.</p>`;
     panel=`<div class="panel"><h3>Team & access</h3>
-      <p class="hint">Give each person a code and pick which accounts they see. One device, one code — the 10-phone person gets all 10 accounts; each girl gets her one.</p>${list}
+      <p class="hint">Give each person a username and code, and pick which accounts they see. They log in with both. One person can hold several accounts; each girl gets her own.</p>${list}
       <button class="btn-ghost" data-editu="new">＋ Add team member</button></div>`;
   }else{
     panel=`<div class="panel"><h3>Manager code</h3><p class="hint">Used to log in to this overview. Keep it private.</p>
@@ -519,7 +520,7 @@ function viewEditUser(userId){
   return `<div class="bar"><button class="back" data-back-admin="team">‹</button>
     <h1><span class="sub">${isNew?'New member':'Editing'}</span>${isNew?'Add team member':esc(u.name||'Member')}</h1></div>
     <form id="userForm" data-id="${u.id}" data-new="${isNew}">
-      <div class="panel"><label class="fld">Name</label><input type="text" id="uName" value="${esc(u.name)}" placeholder="e.g. Sofia"/>
+      <div class="panel"><label class="fld">Username</label><input type="text" id="uName" value="${esc(u.name)}" placeholder="e.g. sofia" autocapitalize="none"/>
         <label class="fld">Access code</label><input type="text" id="uCode" inputmode="numeric" value="${esc(u.code)}" placeholder="e.g. 4821"/></div>
       <div class="panel"><h3>Accounts they can see</h3><p class="hint">Tick the tiles that should appear on this person’s dashboard.</p>${checks}</div>
       <button type="submit" class="btn-primary">Save team member</button>
@@ -544,7 +545,8 @@ function bind(){
 
   if($("#createBtn"))$("#createBtn").onclick=()=>{const a=$("#ac1").value.trim(),b=$("#ac2").value.trim();
     if(a.length<3)return toast("Use at least 3 characters");if(a!==b)return toast("Codes don’t match");createStudio(a);};
-  if($("#loginBtn")){const go=()=>tryLogin($("#loginCode").value);$("#loginBtn").onclick=go;$("#loginCode").onkeydown=e=>{if(e.key==="Enter")go();};}
+  if($("#loginBtn")){const go=()=>tryLogin($("#loginName")?.value,$("#loginCode").value);$("#loginBtn").onclick=go;
+    $("#loginCode").onkeydown=e=>{if(e.key==="Enter")go();};if($("#loginName"))$("#loginName").onkeydown=e=>{if(e.key==="Enter")go();};}
 
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{adminTab=b.dataset.tab;render();});
   document.querySelectorAll("[data-edita]").forEach(b=>b.onclick=()=>{route={name:"editAcct",accId:b.dataset.edita};render();});
@@ -580,12 +582,15 @@ function bind(){
   }
 }
 
-function tryLogin(code){
-  code=(code||"").trim();if(!code)return;
+function tryLogin(username,code){
+  username=(username||"").trim();code=(code||"").trim();
+  if(!username&&!code)return;
+  // manager logs in with the manager code alone
   if(cfg.adminCode&&code===cfg.adminCode){session={role:"admin"};saveSession();route={name:"dash"};return render();}
-  const u=(cfg.users||[]).find(x=>x.code&&x.code===code);
+  // team member must match BOTH username and code
+  const u=(cfg.users||[]).find(x=>x.code&&x.code===code&&(x.name||"").trim().toLowerCase()===username.toLowerCase());
   if(u){session={role:"emp",userId:u.id};saveSession();route={name:"dash"};return render();}
-  toast("Code not recognised");
+  toast("Wrong username or code");
 }
 
 document.addEventListener("visibilitychange",()=>{
