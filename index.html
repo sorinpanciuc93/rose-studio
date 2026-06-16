@@ -152,18 +152,7 @@ label.fld{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;text
 <div id="toast"></div>
 
 <script src="firebase-config.js"></script>
-<script>
-window._loadTimer=setTimeout(function(){
-  var a=document.getElementById('app');
-  if(a)a.innerHTML='<div class="screen"><div class="logo">💔</div><h2 class="serif">Can\'t connect</h2><p>Firebase scripts failed to load. Check your internet connection.</p><button class="btn-primary" style="max-width:200px;margin:0 auto" onclick="location.reload()">Retry</button></div>';
-},14000);
-</script>
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { getFirestore, doc, setDoc, onSnapshot, increment }
-  from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-clearTimeout(window._loadTimer);
 
 /* ---------- constants ---------- */
 const CATS = [
@@ -182,6 +171,7 @@ const FC = window.FIREBASE_CONFIG;
 const USE_FB = !!(FC && !/PASTE/.test(FC.apiKey || "PASTE"));
 let backend = USE_FB ? "fb" : "local";
 let db, auth, progUnsub = null;
+let _doc, _setDoc, _onSnapshot, _increment;
 
 /* ---------- state ---------- */
 let cfg = null;
@@ -215,24 +205,28 @@ function currentUserName(){
 }
 
 /* ============================================================ DATA LAYER */
-setTimeout(()=>{if(route.name==="loading"){route={name:"error",msg:"Timed out — Firebase scripts may be blocked on your network, or Anonymous auth / Firestore is disabled in the Firebase console."};render();}},12000);
 if(USE_FB) bootFB(); else bootLocal();
 
 async function bootFB(){
-  const timeout=setTimeout(()=>{if(route.name==="loading"){route={name:"error",msg:"Firebase timed out. Check your connection and that Anonymous auth + Firestore are enabled."};render();}},10000);
   try{
-    const app=initializeApp(FC); auth=getAuth(app); db=getFirestore(app);
-    await signInAnonymously(auth);
-    clearTimeout(timeout);
-    onSnapshot(doc(db,"studio","config"),
+    const m1=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+    const m2=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js");
+    const m3=await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+    _doc=m3.doc; _setDoc=m3.setDoc; _onSnapshot=m3.onSnapshot; _increment=m3.increment;
+    const app=m1.initializeApp(FC); auth=m2.getAuth(app); db=m3.getFirestore(app);
+    await m2.signInAnonymously(auth);
+    _onSnapshot(_doc(db,"studio","config"),
       s=>applyConfig(s.exists()?s.data():null),
       err=>{route={name:"error",msg:err.message};render();});
     subscribeProgressFB();
-  }catch(e){ clearTimeout(timeout); route={name:"error",msg:e.message}; render(); }
+  }catch(e){
+    route={name:"error",msg:"Could not load Firebase ("+e.message+"). Check your internet connection and reload."};
+    render();
+  }
 }
 function subscribeProgressFB(){
   today=todayStr(); if(progUnsub)progUnsub();
-  progUnsub=onSnapshot(doc(db,"studio","progress-"+today), s=>applyProgress(s.exists()?s.data():null));
+  progUnsub=_onSnapshot(_doc(db,"studio","progress-"+today), s=>applyProgress(s.exists()?s.data():null));
 }
 function bootLocal(){
   applyConfig(localCfg());
@@ -266,7 +260,7 @@ function routeAfterConfig(){
 }
 
 async function saveConfig(){
-  if(backend==="fb"){ try{ await setDoc(doc(db,"studio","config"), cfg); }catch(e){ toast("Save failed"); } }
+  if(backend==="fb"){ try{ await _setDoc(_doc(db,"studio","config"), cfg); }catch(e){ toast("Save failed"); } }
   else { localStorage.setItem("rs.cfg", JSON.stringify(cfg)); applyConfig(cfg); }
 }
 async function createStudio(code){
@@ -279,8 +273,8 @@ async function tick(accId,cat,d){
   prog.byAccount[accId][cat]=Math.max(0,(prog.byAccount[accId][cat]||0)+d);
   render();
   if(backend==="fb"){
-    try{ await setDoc(doc(db,"studio","progress-"+today),
-      {date:today, byAccount:{[accId]:{[cat]:increment(d)}}}, {merge:true}); }
+    try{ await _setDoc(_doc(db,"studio","progress-"+today),
+      {date:today, byAccount:{[accId]:{[cat]:_increment(d)}}}, {merge:true}); }
     catch(e){ toast("Couldn’t sync — check connection"); }
   } else { prog.date=today; localStorage.setItem("rs.prog-"+today, JSON.stringify(prog)); }
 }
