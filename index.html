@@ -21,6 +21,7 @@
   --blush:#FFF5F7; --blush-2:#FFE9EF; --surface:#FFFFFF;
   --rose:#E8889B; --rose-deep:#D6607A; --rose-ink:#5A2A3A; --rose-soft:#C9A0A6;
   --gold:#D4A574; --gold-deep:#C18A57;
+  --green:#5CC68C; --green-deep:#2E9E63; --green-bg-1:#F4FCF7; --green-bg-2:#E4F7ED; --green-emoji:#D7F0E0;
   --line:rgba(214,96,122,.14); --shadow:0 10px 30px rgba(214,96,122,.16);
   --shadow-sm:0 4px 14px rgba(214,96,122,.12); --radius:26px; --radius-sm:18px;
 }
@@ -58,7 +59,7 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
 .acct-user{font-size:12.5px;color:var(--rose-soft);font-weight:600}
 .acct-foot{display:flex;align-items:center;justify-content:space-between;margin-top:14px}
 .chip{font-size:11.5px;font-weight:700;padding:5px 10px;border-radius:999px;background:var(--blush-2);color:var(--rose-deep)}
-.chip.done{background:linear-gradient(135deg,#F6E2C4,#EAC79A);color:#7a5320}
+.chip.done{background:linear-gradient(135deg,#DAF3E5,#BFEBD2);color:#1F7A4C}
 
 .ring{width:46px;height:46px;position:relative;flex:0 0 auto}
 .ring svg{transform:rotate(-90deg)}
@@ -69,20 +70,20 @@ button{font-family:inherit;cursor:pointer;border:none;background:none;color:inhe
   border:1px solid var(--line);padding:14px 12px 12px;display:flex;flex-direction:column;gap:6px;
   cursor:pointer;transition:transform .12s ease;-webkit-user-select:none;user-select:none}
 .cat-tile:active{transform:scale(.96)}
-.cat-tile.complete{background:linear-gradient(135deg,#FFFDF8,#FFF6E9)}
+.cat-tile.complete{background:linear-gradient(135deg,var(--green-bg-1),var(--green-bg-2))}
 .ct-top{display:flex;align-items:center;justify-content:space-between}
 .ct-emoji{width:38px;height:38px;border-radius:12px;background:var(--blush-2);display:grid;place-items:center;font-size:20px;flex:0 0 auto}
-.cat-tile.complete .ct-emoji{background:#F6E7CC}
+.cat-tile.complete .ct-emoji{background:var(--green-emoji)}
 .ct-check{font-size:18px;line-height:1}
 .ct-name{font-family:"Fraunces",serif;font-weight:600;font-size:15px;margin:2px 0 0}
 .ct-goal{font-size:11px;color:var(--rose-soft);font-weight:600}
 .ct-count{font-family:"Fraunces",serif;font-size:26px;font-weight:600;color:var(--rose-deep);line-height:1;margin:2px 0}
-.cat-tile.complete .ct-count{color:var(--gold-deep)}
+.cat-tile.complete .ct-count{color:var(--green-deep)}
 .ct-folder{font-size:16px}
 .folder-cta{margin-top:auto;font-size:12px;font-weight:700;color:var(--rose-deep);background:var(--blush-2);border-radius:12px;padding:11px 8px;text-align:center}
 .progress-track{height:6px;border-radius:99px;background:var(--blush-2);overflow:hidden}
 .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--rose),var(--rose-deep));transition:width .3s ease}
-.cat-tile.complete .progress-fill{background:linear-gradient(90deg,var(--gold),var(--gold-deep))}
+.cat-tile.complete .progress-fill{background:linear-gradient(90deg,var(--green),var(--green-deep))}
 .stepper{display:flex;align-items:center;justify-content:space-between;background:var(--blush-2);border-radius:12px;overflow:hidden;margin-top:4px}
 .stepper button{width:40px;height:40px;font-size:22px;font-weight:600;color:var(--rose-deep)}
 .stepper button:active{background:#FBD7E1}
@@ -210,17 +211,24 @@ label.fld{display:block;font-size:12px;font-weight:700;letter-spacing:.04em;text
 .ov-top .nm small{display:block;font-family:"Quicksand";font-weight:600;font-size:11.5px;color:var(--rose-soft)}
 .mini-grid{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px}
 .mini{background:var(--blush);border-radius:13px;padding:9px 6px;text-align:center}
-.mini.done{background:linear-gradient(135deg,#FBF1DF,#F4E3C5)}
+.mini.done{background:linear-gradient(135deg,var(--green-bg-2),#CDEFDB)}
 .mini .lab{font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--rose-soft)}
 .mini .val{font-family:"Fraunces",serif;font-weight:600;font-size:16px;color:var(--rose-deep);margin-top:2px}
-.mini.done .val{color:var(--gold-deep)}
+.mini.done .val{color:var(--green-deep)}
 
 .note{font-size:12px;color:var(--rose-soft);font-weight:500;text-align:center;margin-top:18px;line-height:1.6}
 .mono{font-family:ui-monospace,Menlo,monospace;background:rgba(193,138,87,.16);padding:1px 6px;border-radius:6px;font-size:.92em}
 #toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);background:var(--rose-ink);color:#fff;
   padding:12px 20px;border-radius:999px;font-weight:600;font-size:14px;box-shadow:var(--shadow);opacity:0;pointer-events:none;transition:.25s;z-index:50;max-width:90%}
 #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-@media (prefers-reduced-motion:reduce){*{transition:none !important}}
+.celebrate{position:fixed;inset:0;pointer-events:none;z-index:60;overflow:hidden}
+.celebrate span{position:absolute;top:42%;opacity:0;will-change:transform,opacity;animation:cele-pop linear forwards}
+@keyframes cele-pop{
+  0%{transform:translate(0,0) scale(.4) rotate(0);opacity:0}
+  12%{opacity:1}
+  100%{transform:translate(var(--xd,0),-48vh) scale(1) rotate(35deg);opacity:0}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none !important}.celebrate{display:none}}
 </style>
 </head>
 <body>
@@ -371,12 +379,32 @@ async function createStudio(code){
   cfg={adminCode:code, accounts:[], users:[]}; session={role:"admin"}; saveSession();
   await saveConfig();
 }
+let lastCelebrate=0;
+function celebrate(){
+  const now=Date.now();
+  if(now-lastCelebrate<60000) return;               // at most once per 60s
+  if(window.matchMedia&&window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  lastCelebrate=now;
+  const pool=["🎉","✨","💚","🎊","🌿","⭐","🥳"];
+  const wrap=document.createElement("div"); wrap.className="celebrate"; let h="";
+  for(let i=0;i<16;i++){
+    const e=pool[Math.floor(Math.random()*pool.length)];
+    const left=Math.random()*100, delay=(Math.random()*0.35).toFixed(2), dur=(1.5+Math.random()*0.9).toFixed(2),
+      size=(18+Math.random()*18)|0, xd=((Math.random()*2-1)*60)|0;
+    h+=`<span style="left:${left}%;animation-delay:${delay}s;animation-duration:${dur}s;font-size:${size}px;--xd:${xd}px">${e}</span>`;
+  }
+  wrap.innerHTML=h; document.body.appendChild(wrap);
+  setTimeout(()=>wrap.remove(),2900);
+}
 async function tick(accId,cat,d){
   if(!viewingToday()) return;                       // past days are view-only
   if(d<0 && getCount(accId,cat)<=0) return;
+  const acc=(cfg.accounts||[]).find(a=>a.id===accId), goal=(acc&&acc.goals&&acc.goals[cat])||0;
+  const before=getCount(accId,cat);
   prog.byAccount[accId]=prog.byAccount[accId]||{};
   prog.byAccount[accId][cat]=Math.max(0,(prog.byAccount[accId][cat]||0)+d);
   render();
+  if(d>0 && goal>0 && before<goal && getCount(accId,cat)>=goal) celebrate();
   if(backend==="fb"){
     try{ await setDoc(doc(db,"studio","progress-"+today),
       {date:today, byAccount:{[accId]:{[cat]:increment(d)}}}, {merge:true}); }
@@ -451,9 +479,9 @@ function ring(done,goal){
   const pct=goal>0?done/goal:0,r=19,c=2*Math.PI*r,off=c*(1-pct),full=goal>0&&done>=goal;
   return `<div class="ring"><svg width="46" height="46" viewBox="0 0 46 46">
     <circle cx="23" cy="23" r="${r}" fill="none" stroke="#FCE3EA" stroke-width="5"/>
-    <circle cx="23" cy="23" r="${r}" fill="none" stroke="${full?'var(--gold)':'var(--rose-deep)'}" stroke-width="5"
+    <circle cx="23" cy="23" r="${r}" fill="none" stroke="${full?'var(--green)':'var(--rose-deep)'}" stroke-width="5"
       stroke-linecap="round" stroke-dasharray="${c}" stroke-dashoffset="${off}"/></svg>
-    <div class="heart">${full?'💛':'🩷'}</div></div>`;
+    <div class="heart">${full?'💚':'🩷'}</div></div>`;
 }
 const userChip=()=>`<button class="iconbtn logout-btn" id="who" title="Log out" aria-label="Log out"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>`;
 const demoBanner=()=> backend==="fb" ? "" :
@@ -526,7 +554,7 @@ function viewAccount(accId){
     const g=a.goals?.[c.key]||0,n=getCount(a.id,c.key),ok=g>0&&n>=g,pct=g>0?Math.min(100,n/g*100):0;
     const cnt = loading ? '…' : (g>0?(n+'/'+g):n);
     return `<div class="cat-tile ${ok?'complete':''}" ${(editable&&link)?('data-open="'+esc(link)+'"'):''}>
-        <div class="ct-top"><div class="ct-emoji">${c.emoji}</div>${ok?'<span class="ct-check">💛</span>':''}</div>
+        <div class="ct-top"><div class="ct-emoji">${c.emoji}</div>${ok?'<span class="ct-check">💚</span>':''}</div>
         <div class="ct-name">${c.label}</div>
         <div class="ct-goal">${g>0?('Goal · '+g):'No goal'}</div>
         <div class="ct-count">${cnt}</div>
