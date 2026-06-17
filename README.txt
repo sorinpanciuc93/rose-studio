@@ -1,87 +1,81 @@
-ROSÉ STUDIO — put it on GitHub Pages (free, one live URL)
+POSTUDIO — daily content-posting tracker for a small team
 =========================================================
 
-You do NOT need Firebase to start. The app opens in DEMO MODE and works
-immediately (data saves on the device you're testing on). When you're
-ready for the real multi-phone setup with the live central overview, you
-paste Firebase keys once — nothing else changes.
+A phone-first dashboard to track how many Stories / Posts / Reels each
+account posts per day against a daily goal, with a manager overview,
+per-day history, and weekly/monthly reports.
+
+LIVE URL:  https://sorinpanciuc93.github.io/Postudio/
+REPO:      https://github.com/sorinpanciuc93/Postudio
+
+It is already online and connected to Firebase, so it syncs live across
+every phone — no setup needed to use it day to day.
 
 ==========================================================
-A) GET IT ONLINE ON GITHUB PAGES  (~3 minutes)
+A) LOGGING IN
 ==========================================================
-  1. Sign in at https://github.com  (make a free account if needed).
-  2. Click the + (top right) -> "New repository".
-       - Name: rose-studio   (anything is fine)
-       - Public
-       - Create repository
-  3. On the new repo page click "uploading an existing file"
-     (link in the "Quick setup" box).
-  4. Unzip the folder I gave you, then drag ALL of these files in:
-       index.html
-       firebase-config.js
-       manifest.webmanifest
-       service-worker.js
-       icon-180.png  icon-192.png  icon-512.png
-     Click "Commit changes".
-  5. Go to the repo's  Settings -> Pages.
-       - "Build and deployment" -> Source: "Deploy from a branch"
-       - Branch: main   Folder: / (root)   -> Save
-  6. Wait ~1 minute, refresh the Pages settings page. It shows:
-       "Your site is live at https://YOURNAME.github.io/rose-studio/"
-     Open that link. Done — it works in demo mode right now.
-
-  To change anything later: open the file in the repo, click the pencil
-  (Edit), make changes, Commit. Pages redeploys in a minute. (The app is
-  set to load fresh on refresh, so you'll see your changes without fighting
-  a cache.)
+  - Manager:  username  admin   + your manager code.
+  - Team member: their username + their code (set by the manager).
+    A team member only sees the accounts assigned to them.
+  - Wrong username or code shows a single "Wrong username or code".
+  - Log out with the red sign-out icon (top right).
 
 ==========================================================
-B) TEST IT (demo mode)
+B) MANAGING THE STUDIO (manager)
 ==========================================================
-  - First open asks you to set a MANAGER CODE. That's you.
-  - Gear (top right) -> Accounts tab -> add accounts, links, daily goals.
-  - Team tab -> add people, give each a code, tick which accounts they see.
-  - Log out (crown icon) and log back in with a team code to see what that
-    person sees. Each device remembers its own login.
-  NOTE: in demo mode each device is separate, so a teammate on another
-  phone won't see your data yet. That's what part C fixes.
-
-==========================================================
-C) GO LIVE ACROSS ALL PHONES  (when ready — ~5 min, free)
-==========================================================
-  1. https://console.firebase.google.com -> Add project.
-  2. Build -> Firestore Database -> Create database ->
-       "Start in production mode" -> pick a location -> Enable.
-  3. Build -> Authentication -> Get started -> enable "Anonymous".
-  4. Project settings (gear) -> "Your apps" -> click </> (Web) ->
-       register app -> copy the config values.
-  5. In your GitHub repo, open firebase-config.js -> pencil (Edit) ->
-       paste the values over the PASTE_... placeholders -> Commit.
-  6. Firestore -> Rules tab -> replace all with the block below -> Publish:
-
-       rules_version = '2';
-       service cloud.firestore {
-         match /databases/{database}/documents {
-           match /{document=**} {
-             allow read, write: if request.auth != null;
-           }
-         }
-       }
-
-  That's it. The banner disappears and every phone now shares the same
-  accounts, codes, goals and live progress. Your manager login shows the
-  live overview of all accounts.
-
-  Security note: this is lightweight internal-tool security — the access
-  codes are the practical gate, and anyone using the app can read/write the
-  studio data. Fine for a small private team. Strict per-person permissions
-  would need real user accounts (can be added later).
+  Gear icon (top right) -> three tabs:
+   - Accounts: add accounts, paste folder links (Drive / OneDrive),
+     and set a daily goal per type. "Others" is a folder-only tile
+     (no count) for storing documents.
+   - Team: add people, give each a USERNAME and CODE, and tick which
+     accounts they can see. ("admin" is reserved for the manager.)
+   - Studio: change the manager code, see this device's status.
 
 ==========================================================
-D) ADD TO HOME SCREEN (each phone)
+C) DAILY USE
+==========================================================
+  - Tap an account, then tap a category tile to open its folder.
+    Post the content, then tap + to log it.
+  - A completed goal turns the tile pastel green with a short
+    celebration; the "Others" tile just opens its document folder.
+  - The day strip + calendar let you view past days (read-only);
+    only TODAY can be edited.
+
+==========================================================
+D) REPORTS
+==========================================================
+  - 📊 icon (top right) -> pick the accounts to include, choose a real
+    calendar Week (Mon–Sun) or Month, then Generate.
+  - Each day is green (goal met/surpassed) or red (missed); the header
+    shows totals as posted/target (e.g. 2/14 stories).
+  - Export with "Share image" (PNG) or "Share PDF" — both open the
+    phone's native share sheet; files are named by period + accounts.
+
+==========================================================
+E) EDITING / DEPLOYING
+==========================================================
+  - Edit a file in the GitHub repo (pencil icon) -> Commit. GitHub
+    Pages redeploys in ~1 minute. The app loads fresh on refresh.
+  - Files: index.html (the whole app), firebase-config.js (keys),
+    manifest.webmanifest, service-worker.js, icon-180/192/512.png.
+  - Pages setting: Settings -> Pages -> Deploy from a branch ->
+    Branch: main / (root).
+
+==========================================================
+F) FIREBASE (already configured)
+==========================================================
+  Backend project: rose-studio-6bd73 (internal id only — not shown to
+  users; no need to rename). Firestore + Anonymous auth are enabled and
+  the security rules allow read/write to any signed-in (anonymous) user.
+
+  Security note: lightweight internal-tool security — the access codes
+  are the practical gate, and anyone using the app can read/write the
+  studio data. Fine for a small private team. Strict per-person
+  permissions would need real user accounts (can be added later).
+
+==========================================================
+G) ADD TO HOME SCREEN (each phone)
 ==========================================================
   iPhone (Safari):  Share -> "Add to Home Screen".
   Android (Chrome): menu -> "Install app / Add to Home screen".
-
-Want next: a per-day history/report, or letting employees mark a specific
-piece of content done (not just a counter)? Ask and I'll add it.
+  Use the live URL above so the new name and icon show up.
