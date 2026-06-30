@@ -878,7 +878,6 @@ function bind(){
       if(uname.toLowerCase()==="admin")return toast("'admin' is reserved for the manager");
       if(!code)return toast("Give them a code");
       if(code===cfg.adminCode)return toast("That’s the manager code — pick another");
-      if((cfg.users||[]).some(u=>u.code===code&&u.id!==id))return toast("Code already used");
       if((cfg.users||[]).some(u=>(u.name||"").trim().toLowerCase()===uname.toLowerCase()&&u.id!==id))return toast("Username already used");
       const usr={id,name:uname,code,accountIds:[...uf.querySelectorAll('[data-acc]:checked')].map(x=>x.dataset.acc)};
       cfg.users=cfg.users||[];if(isNew)cfg.users.push(usr);else cfg.users[cfg.users.findIndex(x=>x.id===id)]=usr;
